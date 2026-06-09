@@ -30,6 +30,8 @@ export interface FoodStats {
 
 export type FilterType = 'all' | FoodStatus;
 
+export type ArchiveFilterType = 'all' | ArchiveReason;
+
 export interface FoodPreset {
   name: string;
   shelfLife: number;

@@ -1,9 +1,11 @@
-import { ArrowLeft, RotateCcw, Trash2, Utensils, Package } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ArrowLeft, RotateCcw, Trash2, Utensils, Package, Search } from 'lucide-react';
 import { useFoodStore } from '@/store/useFoodStore';
 import { formatDate } from '@/utils/dateUtils';
 import { getRemainingDays, formatRelativeDay } from '@/utils/dateUtils';
 import { getStatus, getStatusTextColor } from '@/utils/statusUtils';
 import { locationNames } from '@/utils/foodPresets';
+import { ArchiveFilterType } from '@/types';
 
 interface HistoryPageProps {
   onNavigate: (page: string) => void;
@@ -12,6 +14,8 @@ interface HistoryPageProps {
 export default function HistoryPage({ onNavigate }: HistoryPageProps) {
   const { getArchivedFoods, restoreFood, clearArchived } = useFoodStore();
   const archivedFoods = getArchivedFoods();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ArchiveFilterType>('all');
 
   const handleRestore = (id: string) => {
     if (window.confirm('确定要恢复这个食材吗？')) {
@@ -25,8 +29,34 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
     }
   };
 
+  const filteredFoods = useMemo(() => {
+    let result = [...archivedFoods];
+
+    if (activeFilter !== 'all') {
+      result = result.filter((f) => f.archiveReason === activeFilter);
+    }
+
+    if (searchTerm.trim()) {
+      const term = searchTerm.trim().toLowerCase();
+      result = result.filter((f) => f.name.toLowerCase().includes(term));
+    }
+
+    return result;
+  }, [archivedFoods, activeFilter, searchTerm]);
+
   const eatenCount = archivedFoods.filter((f) => f.archiveReason === 'eaten').length;
   const discardedCount = archivedFoods.filter((f) => f.archiveReason === 'discarded').length;
+
+  const archiveFilterOptions: { value: ArchiveFilterType; label: string; emoji: string }[] = [
+    { value: 'all', label: '全部', emoji: '📋' },
+    { value: 'eaten', label: '已吃完', emoji: '🍽️' },
+    { value: 'discarded', label: '已丢弃', emoji: '🗑️' },
+  ];
+
+  const getFilterCount = (filter: ArchiveFilterType): number => {
+    if (filter === 'all') return archivedFoods.length;
+    return archivedFoods.filter((f) => f.archiveReason === filter).length;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100">
@@ -61,6 +91,69 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
+        <div className="mb-6 space-y-4">
+          <div className="relative">
+            <Search
+              size={20}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="搜索食材名称..."
+              className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 outline-none transition-all bg-white shadow-sm"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {archiveFilterOptions.map((option) => {
+              const count = getFilterCount(option.value);
+              const isActive = activeFilter === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => setActiveFilter(option.value)}
+                  className={`px-4 py-2 rounded-full font-medium text-sm transition-all duration-300 transform hover:scale-105 active:scale-95 ${
+                    isActive
+                      ? 'text-white shadow-lg'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 hover:shadow border border-gray-200'
+                  }`}
+                  style={{
+                    backgroundColor: isActive
+                      ? option.value === 'all'
+                        ? '#6b7280'
+                        : option.value === 'eaten'
+                        ? '#22c55e'
+                        : '#f97316'
+                      : undefined,
+                    boxShadow: isActive
+                      ? `0 4px 14px ${
+                          option.value === 'all'
+                            ? '#6b7280'
+                            : option.value === 'eaten'
+                            ? '#22c55e'
+                            : '#f97316'
+                        }40`
+                      : undefined,
+                  }}
+                >
+                  <span className="mr-1">{option.emoji}</span>
+                  {option.label}
+                  <span
+                    className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                      isActive ? 'bg-white/30' : 'bg-gray-100'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {archivedFoods.length > 0 && (
           <div className="flex justify-end mb-4">
             <button
@@ -85,9 +178,24 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
               返回看板
             </button>
           </div>
+        ) : filteredFoods.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-xl font-bold text-gray-600 mb-2">没有找到匹配的记录</h3>
+            <p className="text-gray-400 mb-6">试试其他搜索词或筛选条件</p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setActiveFilter('all');
+              }}
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
+            >
+              重置筛选
+            </button>
+          </div>
         ) : (
           <div className="space-y-3">
-            {archivedFoods.map((food, index) => {
+            {filteredFoods.map((food, index) => {
               const remainingDays = getRemainingDays(food.purchaseDate, food.shelfLifeDays);
               const status = getStatus(remainingDays);
               const isEaten = food.archiveReason === 'eaten';
